@@ -12,17 +12,17 @@ export const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 11155111);
 
 export const NFT_ADDRESS = requireAddress(
   "NEXT_PUBLIC_NFT_ADDRESS",
-  "0x61594E6CA83A29332581Ac71F2e8140Fb91dd363"
+  "0xD341843212948Bac40dAE9bd2992081309478F23"
 );
 
 export const VAULT_ADDRESS = requireAddress(
   "NEXT_PUBLIC_VAULT_ADDRESS",
-  "0x9F7697aCf2e240E687b743Eb5631d36C12Fc105f"
+  "0xD1dA053FDEF663919307b135bbd33A92D2ccF596"
 );
 
 export const USDC_ADDRESS = requireAddress(
   "NEXT_PUBLIC_USDC_ADDRESS",
-  "0xBF8821AEd892B8D693f2C0B1921810A99EAF5193"
+  "0x3eFB0d0838f7e51a64B7722e2260F13c930C8684"
 );
 
 export const MAX_SUPPLY = 1000;
@@ -35,4 +35,5 @@ export const TIERS = [
   { range: [751, 1000] as const, priceCents: 100_000, label: "Tier IV" },
 ] as const;
 
-export const USDC_DECIMALS = 18;
+/** MockUSDC / vault USDC use 6 decimals (must match on-chain ERC20). */
+export const USDC_DECIMALS = 6;
