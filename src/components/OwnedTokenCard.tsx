@@ -1,0 +1,96 @@
+"use client";
+
+import { useEffect } from "react";
+import {
+  useReadContract,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+  useAccount,
+} from "wagmi";
+import { CryptoSharksNFTAbi } from "@/lib/abis/CryptoSharksNFT";
+import { CryptoSharksStakingVaultAbi } from "@/lib/abis/CryptoSharksStakingVault";
+import { NFT_ADDRESS, VAULT_ADDRESS } from "@/lib/contracts";
+import { Button } from "./ui/Button";
+import { Badge } from "./ui/Badge";
+import { NftImage } from "./NftImage";
+import { Loader2 } from "lucide-react";
+
+interface Props {
+  tokenId: bigint;
+  onChange?: () => void;
+}
+
+export function OwnedTokenCard({ tokenId, onChange }: Props) {
+  const { address } = useAccount();
+
+  const { data: isApprovedForAll, refetch: refetchApproval } = useReadContract({
+    address: NFT_ADDRESS,
+    abi: CryptoSharksNFTAbi,
+    functionName: "isApprovedForAll",
+    args: address ? [address, VAULT_ADDRESS] : undefined,
+    query: { enabled: !!address },
+  });
+
+  const { writeContractAsync: writeApprove, isPending: approving, data: approveHash } = useWriteContract();
+  const { writeContractAsync: writeStake, isPending: staking, data: stakeHash } = useWriteContract();
+  const { isLoading: approveConfirming, isSuccess: approveDone } = useWaitForTransactionReceipt({ hash: approveHash });
+  const { isLoading: stakeConfirming, isSuccess: stakeDone } = useWaitForTransactionReceipt({ hash: stakeHash });
+
+  useEffect(() => {
+    if (approveDone) refetchApproval();
+  }, [approveDone, refetchApproval]);
+
+  useEffect(() => {
+    if (stakeDone) onChange?.();
+  }, [stakeDone, onChange]);
+
+  const onApprove = async () => {
+    await writeApprove({
+      address: NFT_ADDRESS,
+      abi: CryptoSharksNFTAbi,
+      functionName: "setApprovalForAll",
+      args: [VAULT_ADDRESS, true],
+    });
+  };
+
+  const onStake = async () => {
+    await writeStake({
+      address: VAULT_ADDRESS,
+      abi: CryptoSharksStakingVaultAbi,
+      functionName: "stake",
+      args: [tokenId],
+    });
+  };
+
+  return (
+    <div className="glass rounded-2xl p-5 flex flex-col gap-4 hover:ring-1 hover:ring-cyan-400/30 transition">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <NftImage tokenId={tokenId} className="h-14 w-14" />
+          <div>
+            <div className="font-display text-lg text-cyan-100">Shark #{tokenId.toString()}</div>
+            <div className="text-xs text-cyan-100/50">Available to stake</div>
+          </div>
+        </div>
+        <Badge tone="teal">In Wallet</Badge>
+      </div>
+
+      <p className="text-xs text-cyan-100/60 leading-relaxed">
+        Stake to start the 90-day clock. Once qualified, every owner-finalized
+        epoch sends you a pro-rata USDC share.
+      </p>
+
+      {!isApprovedForAll ? (
+        <Button onClick={onApprove} disabled={approving || approveConfirming}>
+          {(approving || approveConfirming) && <Loader2 className="h-4 w-4 animate-spin" />}
+          {approveConfirming ? "Approving…" : "Approve Vault"}
+        </Button>
+      ) : (
+        <Button onClick={onStake} disabled={staking || stakeConfirming}>
+          {(staking || stakeConfirming) && <Loader2 className="h-4 w-4 animate-spin" />}
+          {stakeConfirming ? "Staking…" : "Stake Shark"}
+        </Button>
+      )}
+    </div>
+  );
+}

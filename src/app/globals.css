@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-navy: #102635;
+  --color-teal: #2F7C7E;
+  --color-cyan: #39D7E8;
+}
+
+html,
+body {
+  background: transparent;
+  color: #E6F3F4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  body {
+    @apply font-sans;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-navy-700/40 backdrop-blur-md border border-cyan-400/15;
+  }
+  .glass-strong {
+    @apply bg-navy-700/60 backdrop-blur-xl border border-cyan-400/20;
+  }
+  .text-glow {
+    text-shadow: 0 0 12px rgba(57, 215, 232, 0.55);
+  }
+  .ring-glow {
+    box-shadow: 0 0 0 1px rgba(57, 215, 232, 0.35), 0 0 24px rgba(57, 215, 232, 0.25);
+  }
+  .neon-divider {
+    background: linear-gradient(90deg, transparent, rgba(57,215,232,0.6), transparent);
+    height: 1px;
+    width: 100%;
+  }
+  .shimmer-text {
+    background: linear-gradient(90deg, #6DE1EA 0%, #39D7E8 25%, #ffffff 50%, #39D7E8 75%, #6DE1EA 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 4s linear infinite;
+  }
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #091721;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(47, 124, 126, 0.5);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(57, 215, 232, 0.6);
+}
