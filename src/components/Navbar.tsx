@@ -11,7 +11,6 @@ const NAV = [
   { href: "/", label: "Overview" },
   { href: "/mint", label: "Mint" },
   { href: "/stake", label: "Stake" },
-  { href: "/kiosks", label: "IRL Network" },
 ] as const;
 
 export function Navbar() {
@@ -52,8 +51,8 @@ export function Navbar() {
                     ? "text-cyan-200 bg-cyan-400/10 ring-1 ring-cyan-400/30"
                     : "text-cyan-100/70 hover:text-cyan-100 hover:bg-cyan-400/5",
                   item.href === "/admin" &&
-                    !active &&
-                    "text-amber-200/90 ring-1 ring-amber-400/20 hover:ring-amber-400/40"
+                  !active &&
+                  "text-amber-200/90 ring-1 ring-amber-400/20 hover:ring-amber-400/40"
                 )}
               >
                 {item.label}

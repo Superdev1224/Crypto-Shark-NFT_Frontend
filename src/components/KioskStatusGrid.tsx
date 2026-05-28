@@ -68,7 +68,7 @@ export function KioskStatusGrid() {
           label="Projected Epoch Pool"
           icon={<Radio className="h-4 w-4" />}
           value={`$${data.projectedEpochPoolUsd.toLocaleString()}`}
-          hint="20% of 90-day net (estimate)"
+          hint="15% of 90-day net (estimate)"
         />
         <Stat
           label="Feed Updated"

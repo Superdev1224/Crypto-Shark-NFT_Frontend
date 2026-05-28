@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-// Mock IRL kiosk network feed — replace with real backend integration
+// Mock IRL operations network feed — replace with real backend integration
 const KIOSK_LOCATIONS = [
   { id: "FL-MIA-01", city: "Miami, FL" },
   { id: "FL-ORL-04", city: "Orlando, FL" },
@@ -48,10 +48,10 @@ export async function GET() {
     { dailyRevenueUsd: 0, online: 0, degraded: 0, offline: 0 }
   );
 
-  // Per the White Paper: 20% of net IRL profits flow to the staking pool every 90 days.
-  // We approximate "net" as 35% of gross daily revenue, then 20% routed to pool, x90.
+  // Per the White Paper: 15% of net IRL profits flow to the staking pool every 90 days.
+  // We approximate "net" as 35% of gross daily revenue, then 15% routed to pool, x90.
   const projectedEpochPoolUsd = Math.round(
-    totals.dailyRevenueUsd * 0.35 * 0.2 * 90
+    totals.dailyRevenueUsd * 0.35 * 0.15 * 90
   );
 
   return NextResponse.json({

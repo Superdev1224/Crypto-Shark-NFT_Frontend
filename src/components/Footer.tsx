@@ -12,7 +12,7 @@ export function Footer() {
         <div>
           <p className="font-display tracking-widest text-cyan-200">CRYPTO SHARKS</p>
           <p className="mt-2 text-sm text-cyan-100/60 leading-relaxed">
-            Web3 × IRL utility ecosystem. 1,000 utility NFTs backed by lottery-kiosk
+            Web3 × IRL utility ecosystem. 1,000 utility NFTs backed by real-world
             revenue, paying USDC dividends every 90 days.
           </p>
         </div>
@@ -58,7 +58,6 @@ export function Footer() {
           <ul className="space-y-1 text-cyan-100/70">
             <li><Link className="hover:text-cyan-200" href="/mint">Mint a Shark</Link></li>
             <li><Link className="hover:text-cyan-200" href="/stake">Stake & Claim</Link></li>
-            <li><Link className="hover:text-cyan-200" href="/kiosks">IRL Network Status</Link></li>
           </ul>
         </div>
       </div>

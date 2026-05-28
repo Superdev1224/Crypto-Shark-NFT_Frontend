@@ -26,7 +26,7 @@ export default function HomePage() {
             </h1>
             <p className="text-lg text-cyan-100/70 max-w-xl leading-relaxed">
               1,000 utility NFTs backed by a diversified portfolio of cash-flowing
-              lottery-kiosk operations. 20% of every 90-day net profit cycle is
+              IRL business. 15% of every 90-day net profit cycle is
               deposited into the staking vault and split pro-rata among qualified
               sharks.
             </p>
@@ -69,9 +69,6 @@ export default function HomePage() {
               Read directly from the staking vault on-chain.
             </p>
           </div>
-          <Link href="/kiosks" className="text-cyan-300 text-sm hover:text-cyan-200">
-            IRL network status →
-          </Link>
         </div>
         <PoolStats />
       </section>
@@ -122,7 +119,7 @@ export default function HomePage() {
             <Network className="h-5 w-5 text-cyan-300 mb-3" />
             <CardTitle>IRL-Anchored</CardTitle>
             <CardSubtitle>
-              Funded by a portfolio of regulated lottery-kiosk operations — not
+              Funded by a portfolio of regulated real-world operations — not
               speculative emissions or recursive yield.
             </CardSubtitle>
           </Card>

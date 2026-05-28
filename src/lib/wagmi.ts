@@ -30,20 +30,20 @@ const connectors = [
   coinbaseWallet({ appName: "Crypto Sharks", preference: "all" }),
   ...(projectId
     ? [
-        walletConnect({
-          projectId,
-          showQrModal: true,
-          metadata: {
-            name: "Crypto Sharks",
-            description: "NFT staking & USDC dividends on Crypto Sharks.",
-            url:
-              typeof window !== "undefined"
-                ? window.location.origin
-                : "https://crypto-sharks.app",
-            icons: ["/logo.png"],
-          },
-        }),
-      ]
+      walletConnect({
+        projectId,
+        showQrModal: true,
+        metadata: {
+          name: "Crypto Sharks",
+          description: "NFT staking & USDC dividends on Crypto Sharks.",
+          url:
+            typeof window !== "undefined"
+              ? window.location.origin
+              : "https://crypto-sharks.app",
+          icons: ["/logo.png"],
+        },
+      }),
+    ]
     : []),
 ];
 

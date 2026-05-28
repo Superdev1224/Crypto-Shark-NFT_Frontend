@@ -20,7 +20,7 @@ export async function GET(
   return NextResponse.json({
     name: `Crypto Shark #${tokenId}`,
     description:
-      "Crypto Sharks utility NFT — stake for 90 days to qualify for pro-rata USDC dividends from real-world lottery-kiosk revenue.",
+      "Crypto Sharks utility NFT — stake for 90 days to qualify for pro-rata USDC dividends from real-world operating revenue.",
     image: `${base}/og-image.png`,
     external_url: `${base}/stake`,
   });
