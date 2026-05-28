@@ -12,27 +12,30 @@ import { Anchor, Lock, Sparkles, Wallet } from "lucide-react";
 import { useConnectModal } from "./WalletModal";
 import { Button } from "./ui/Button";
 
+const REFETCH_MS = 12_000;
+
 export function StakeDashboard() {
   const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
   const [scanKey, setScanKey] = useState(0);
   const triggerRescan = useCallback(() => setScanKey((k) => k + 1), []);
 
-  const { data: totalSupply } = useReadContract({
+  const { data: totalSupply, refetch: refetchSupply } = useReadContract({
     address: NFT_ADDRESS,
     abi: CryptoSharksNFTAbi,
     functionName: "totalSupply",
+    query: { refetchInterval: REFETCH_MS },
   });
 
-  const { data: currentEpochId } = useReadContract({
+  const { data: nextEpochId, refetch: refetchEpoch } = useReadContract({
     address: VAULT_ADDRESS,
     abi: CryptoSharksStakingVaultAbi,
     functionName: "currentEpochId",
+    query: { refetchInterval: REFETCH_MS },
   });
 
-  // For every minted token we ask `ownerOf` + `stakes.staker` so we can determine
-  // (a) tokens owned by the user (not in vault) and (b) tokens staked by the user (in vault).
   const minted = Number(totalSupply ?? 0n);
+  const finalizedEpochs = Number(nextEpochId ?? 0n);
 
   const queries = useMemo(() => {
     const arr: {
@@ -60,12 +63,19 @@ export function StakeDashboard() {
 
   const { data: scanData, refetch: refetchScan } = useReadContracts({
     contracts: queries,
-    query: { enabled: minted > 0 && !!address },
+    query: { enabled: minted > 0 && !!address, refetchInterval: REFETCH_MS },
   });
 
   useEffect(() => {
     if (address) refetchScan();
   }, [address, scanKey, refetchScan]);
+
+  const refreshAll = useCallback(() => {
+    triggerRescan();
+    refetchSupply();
+    refetchEpoch();
+    refetchScan();
+  }, [triggerRescan, refetchSupply, refetchEpoch, refetchScan]);
 
   const owned: bigint[] = [];
   const staked: bigint[] = [];
@@ -93,7 +103,7 @@ export function StakeDashboard() {
         <Wallet className="h-10 w-10 mx-auto text-cyan-300" />
         <h2 className="font-display text-2xl mt-4 text-cyan-100">Connect to view your dashboard</h2>
         <p className="text-cyan-100/60 mt-2 mb-6">
-          Track your sharks, stake them into the vault, watch the 90-day countdown,
+          Track your sharks, stake them into the vault, watch the qualification countdown,
           and claim USDC dividends — all in one place.
         </p>
         <Button size="lg" onClick={openConnectModal}>
@@ -119,10 +129,14 @@ export function StakeDashboard() {
           hint="In the staking vault"
         />
         <Stat
-          label="Active Epoch"
+          label="Finalized Epochs"
           icon={<Sparkles className="h-4 w-4" />}
-          value={currentEpochId !== undefined ? `#${currentEpochId.toString()}` : "—"}
-          hint="Next epoch ID to be finalized"
+          value={finalizedEpochs}
+          hint={
+            finalizedEpochs === 0
+              ? "Owner must finalize with qualified sharks"
+              : `Claim rewards for epochs #0–#${finalizedEpochs - 1}`
+          }
         />
       </div>
 
@@ -135,7 +149,7 @@ export function StakeDashboard() {
         </div>
         {staked.length === 0 ? (
           <div className="glass rounded-2xl p-8 text-center text-cyan-100/60">
-            No sharks staked yet. Stake one below to start your 90-day clock.
+            No sharks staked yet. Stake one below to start the qualification clock.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -144,8 +158,8 @@ export function StakeDashboard() {
                 key={tokenId.toString()}
                 tokenId={tokenId}
                 isStakedInVault
-                currentEpochId={(currentEpochId as bigint) ?? 0n}
-                onChange={triggerRescan}
+                nextEpochId={(nextEpochId as bigint) ?? 0n}
+                onChange={refreshAll}
               />
             ))}
           </div>
@@ -161,12 +175,21 @@ export function StakeDashboard() {
         </div>
         {owned.length === 0 ? (
           <div className="glass rounded-2xl p-8 text-center text-cyan-100/60">
-            Nothing to stake right now. <a href="/mint" className="text-cyan-300 underline">Mint a Crypto Shark</a> to get started.
+            Nothing to stake right now.{" "}
+            <a href="/mint" className="text-cyan-300 underline">
+              Mint a Crypto Shark
+            </a>{" "}
+            to get started.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {owned.map((tokenId) => (
-              <OwnedTokenCard key={tokenId.toString()} tokenId={tokenId} onChange={triggerRescan} />
+              <OwnedTokenCard
+                key={tokenId.toString()}
+                tokenId={tokenId}
+                nextEpochId={(nextEpochId as bigint) ?? 0n}
+                onChange={refreshAll}
+              />
             ))}
           </div>
         )}

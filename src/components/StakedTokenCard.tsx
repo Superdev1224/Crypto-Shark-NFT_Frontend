@@ -1,108 +1,72 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import {
-  useReadContract,
-  useReadContracts,
-  useWaitForTransactionReceipt,
-  useWriteContract,
-} from "wagmi";
+import { useEffect } from "react";
+import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { CryptoSharksStakingVaultAbi } from "@/lib/abis/CryptoSharksStakingVault";
-import { VAULT_ADDRESS, STAKE_LOCK_SECONDS } from "@/lib/contracts";
+import { VAULT_ADDRESS } from "@/lib/contracts";
+import { useClaimableEpochs } from "@/hooks/useClaimableEpochs";
+import { useVaultConfig } from "@/hooks/useVaultConfig";
+import { formatStakeLockPeriod } from "@/lib/stake-lock";
+import { formatUsdc } from "@/lib/format";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
+import { ClaimRewardsButton } from "./ClaimRewardsButton";
 import { CountdownTimer } from "./CountdownTimer";
-import { formatUsdc } from "@/lib/format";
 import { NftImage } from "./NftImage";
-import { Loader2, Coins } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 interface Props {
   tokenId: bigint;
   isStakedInVault: boolean;
-  currentEpochId: bigint;
+  nextEpochId: bigint;
   onChange?: () => void;
 }
 
-export function StakedTokenCard({ tokenId, isStakedInVault, currentEpochId, onChange }: Props) {
-  const { data: stakeInfo, refetch: refetchStake } = useReadContract({
+export function StakedTokenCard({ tokenId, isStakedInVault, nextEpochId, onChange }: Props) {
+  const { address } = useAccount();
+  const { stakeLockPeriod } = useVaultConfig();
+  const lockLabel = formatStakeLockPeriod(stakeLockPeriod);
+
+  const { data: isQualifiedOnChain, refetch: refetchQualified } = useReadContract({
     address: VAULT_ADDRESS,
     abi: CryptoSharksStakingVaultAbi,
-    functionName: "stakes",
+    functionName: "isCurrentlyQualified",
     args: [tokenId],
-    query: { enabled: isStakedInVault },
+    query: { enabled: isStakedInVault, refetchInterval: 12_000 },
   });
 
-  const stakeStartTime = (stakeInfo as readonly [bigint, `0x${string}`] | undefined)?.[0] ?? 0n;
-  const qualifyUnix = Number(stakeStartTime) + STAKE_LOCK_SECONDS;
-  const now = Math.floor(Date.now() / 1000);
-  const isQualified = isStakedInVault && stakeStartTime > 0n && now >= qualifyUnix;
-
-  // Build list of (epochId, claimable) for unclaimed finalized epochs
-  const epochCount = Number(currentEpochId);
-  const epochQueries = useMemo(() => {
-    const arr = [] as {
-      address: typeof VAULT_ADDRESS;
-      abi: typeof CryptoSharksStakingVaultAbi;
-      functionName: "qualified" | "claimed" | "epochs";
-      args: readonly bigint[];
-    }[];
-    for (let i = 0; i < epochCount; i++) {
-      const id = BigInt(i);
-      arr.push({
-        address: VAULT_ADDRESS,
-        abi: CryptoSharksStakingVaultAbi,
-        functionName: "qualified",
-        args: [id, tokenId] as const,
-      });
-      arr.push({
-        address: VAULT_ADDRESS,
-        abi: CryptoSharksStakingVaultAbi,
-        functionName: "claimed",
-        args: [id, tokenId] as const,
-      });
-      arr.push({
-        address: VAULT_ADDRESS,
-        abi: CryptoSharksStakingVaultAbi,
-        functionName: "epochs",
-        args: [id] as const,
-      });
-    }
-    return arr;
-  }, [epochCount, tokenId]);
-
-  const { data: epochResults, refetch: refetchEpochs } = useReadContracts({
-    contracts: epochQueries,
-    query: { enabled: epochCount > 0 },
+  const { data: secondsUntilQualified, refetch: refetchTimer } = useReadContract({
+    address: VAULT_ADDRESS,
+    abi: CryptoSharksStakingVaultAbi,
+    functionName: "timeUntilQualified",
+    args: [tokenId],
+    query: { enabled: isStakedInVault, refetchInterval: 12_000 },
   });
 
-  const claimable: { epochId: bigint; amount: bigint }[] = [];
-  if (epochResults) {
-    for (let i = 0; i < epochCount; i++) {
-      const q = epochResults[i * 3]?.result as boolean | undefined;
-      const c = epochResults[i * 3 + 1]?.result as boolean | undefined;
-      const epoch = epochResults[i * 3 + 2]?.result as
-        | readonly [bigint, bigint, bigint, bigint, boolean]
-        | undefined;
-      if (q && !c && epoch && epoch[4]) {
-        claimable.push({ epochId: BigInt(i), amount: epoch[2] });
-      }
-    }
-  }
+  const { claimable, totalClaimable, finalizedCount, refetch: refetchRewards } =
+    useClaimableEpochs(tokenId, nextEpochId, address);
 
-  const totalClaimable = claimable.reduce((acc, x) => acc + x.amount, 0n);
+  const qualifyUnix =
+    secondsUntilQualified !== undefined
+      ? Math.floor(Date.now() / 1000) + Number(secondsUntilQualified)
+      : 0;
 
-  const { writeContractAsync: writeUnstake, isPending: unstaking, data: unstakeHash } = useWriteContract();
-  const { writeContractAsync: writeClaim, isPending: claiming, data: claimHash } = useWriteContract();
-  const { isLoading: unstakeConfirming, isSuccess: unstakeDone } = useWaitForTransactionReceipt({ hash: unstakeHash });
-  const { isLoading: claimConfirming, isSuccess: claimDone } = useWaitForTransactionReceipt({ hash: claimHash });
+  const { writeContractAsync: writeUnstake, isPending: unstaking, data: unstakeHash } =
+    useWriteContract();
+  const { isLoading: unstakeConfirming, isSuccess: unstakeDone } = useWaitForTransactionReceipt({
+    hash: unstakeHash,
+  });
+
+  const refresh = () => {
+    refetchQualified();
+    refetchTimer();
+    refetchRewards();
+    onChange?.();
+  };
 
   useEffect(() => {
-    if (unstakeDone || claimDone) {
-      refetchStake();
-      refetchEpochs();
-      onChange?.();
-    }
-  }, [unstakeDone, claimDone, refetchStake, refetchEpochs, onChange]);
+    if (unstakeDone) refresh();
+  }, [unstakeDone]);
 
   const onUnstake = async () => {
     await writeUnstake({
@@ -113,17 +77,7 @@ export function StakedTokenCard({ tokenId, isStakedInVault, currentEpochId, onCh
     });
   };
 
-  const onClaimAll = async () => {
-    // Claim each epoch sequentially. Frontend keeps the call simple; users can claim per epoch.
-    for (const { epochId } of claimable) {
-      await writeClaim({
-        address: VAULT_ADDRESS,
-        abi: CryptoSharksStakingVaultAbi,
-        functionName: "claim",
-        args: [epochId, tokenId],
-      });
-    }
-  };
+  const isQualified = isQualifiedOnChain === true;
 
   return (
     <div className="glass rounded-2xl p-5 flex flex-col gap-4 hover:ring-1 hover:ring-cyan-400/30 transition">
@@ -132,78 +86,69 @@ export function StakedTokenCard({ tokenId, isStakedInVault, currentEpochId, onCh
           <NftImage tokenId={tokenId} className="h-14 w-14" />
           <div>
             <div className="font-display text-lg text-cyan-100">Shark #{tokenId.toString()}</div>
-            <div className="text-xs text-cyan-100/50">
-              {isStakedInVault ? "In vault" : "In your wallet"}
-            </div>
+            <div className="text-xs text-cyan-100/50">In vault</div>
           </div>
         </div>
-        {isStakedInVault ? (
-          isQualified ? (
-            <Badge tone="cyan">Qualified for Upcoming Payout</Badge>
-          ) : (
-            <Badge tone="amber">Accumulating</Badge>
-          )
+        {isQualified ? (
+          <Badge tone="cyan">Qualified</Badge>
         ) : (
-          <Badge tone="muted">Unstaked</Badge>
+          <Badge tone="amber">Accumulating</Badge>
         )}
       </div>
 
-      {isStakedInVault && (
+      {isStakedInVault && !isQualified && secondsUntilQualified !== undefined && (
         <div className="rounded-xl bg-navy-800/60 border border-cyan-400/10 p-4">
           <div className="text-[10px] uppercase tracking-widest text-cyan-100/50 mb-2">
-            Time to 90-day threshold
+            Time until {lockLabel} threshold
           </div>
           <CountdownTimer targetUnix={qualifyUnix} />
         </div>
       )}
 
+      {finalizedCount === 0 && isQualified && (
+        <p className="text-xs text-amber-200/80 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
+          You are qualified, but no epoch has been finalized yet. The owner must run{" "}
+          <strong>Finalize epoch</strong> with at least one qualified shark staked.
+        </p>
+      )}
+
       {totalClaimable > 0n && (
-        <div className="rounded-xl bg-cyan-400/8 border border-cyan-400/30 p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Coins className="h-4 w-4 text-cyan-300" />
-            <div>
-              <div className="text-xs text-cyan-100/60 uppercase tracking-widest">
-                Claimable USDC
-              </div>
-              <div className="font-display text-xl text-cyan-200 text-glow">
-                ${formatUsdc(totalClaimable)}
-              </div>
-            </div>
+        <div className="rounded-xl bg-cyan-400/8 border border-cyan-400/30 p-4">
+          <div className="text-xs text-cyan-100/60 uppercase tracking-widest mb-1">
+            Claimable USDC
           </div>
-          <span className="text-xs text-cyan-100/50">
-            {claimable.length} epoch{claimable.length > 1 ? "s" : ""}
-          </span>
+          <div className="font-display text-xl text-cyan-200 text-glow">
+            ${formatUsdc(totalClaimable)}
+          </div>
+          <p className="text-xs text-cyan-100/50 mt-2">
+            {claimable.length} epoch{claimable.length > 1 ? "s" : ""} ready to claim
+          </p>
         </div>
       )}
 
       <div className="flex gap-2">
-        {totalClaimable > 0n && (
-          <Button
-            className="flex-1"
-            onClick={onClaimAll}
-            disabled={claiming || claimConfirming}
-          >
-            {(claiming || claimConfirming) && <Loader2 className="h-4 w-4 animate-spin" />}
-            {claimConfirming ? "Claiming…" : `Claim $${formatUsdc(totalClaimable)}`}
-          </Button>
-        )}
-        {isStakedInVault && (
-          <Button
-            variant="outline"
-            className={totalClaimable > 0n ? "" : "flex-1"}
-            onClick={onUnstake}
-            disabled={unstaking || unstakeConfirming}
-          >
-            {(unstaking || unstakeConfirming) && <Loader2 className="h-4 w-4 animate-spin" />}
-            Unstake
-          </Button>
-        )}
+        <ClaimRewardsButton
+          tokenId={tokenId}
+          claimable={claimable}
+          totalClaimable={totalClaimable}
+          className="flex-1"
+          onSuccess={refresh}
+        />
+        <Button
+          variant="outline"
+          className={totalClaimable > 0n ? "" : "flex-1"}
+          onClick={onUnstake}
+          disabled={unstaking || unstakeConfirming}
+        >
+          {(unstaking || unstakeConfirming) && <Loader2 className="h-4 w-4 animate-spin" />}
+          Unstake
+        </Button>
       </div>
 
-      {isStakedInVault && !isQualified && (
+      {!isQualified && (
         <p className="text-xs text-cyan-100/50 leading-relaxed">
-          Unstaking before the 90-day threshold returns your NFT immediately but
-          resets the qualification clock and forfeits the current epoch.
+          Unstaking before the {lockLabel} threshold returns your NFT but resets the
+          qualification clock.
         </p>
       )}
     </div>

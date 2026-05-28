@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useAccount,
+  usePublicClient,
   useReadContract,
   useReadContracts,
   useWaitForTransactionReceipt,
@@ -15,6 +16,9 @@ import { erc20Abi } from "@/lib/abis/erc20";
 import { NFT_ADDRESS, USDC_ADDRESS, VAULT_ADDRESS } from "@/lib/contracts";
 import { formatUsdc, parseUsdcInput, shortAddress } from "@/lib/format";
 import { useIsContractOwner } from "@/hooks/useIsContractOwner";
+import { useQualifiedSharkCount } from "@/hooks/useQualifiedSharkCount";
+import { useVaultConfig } from "@/hooks/useVaultConfig";
+import { formatStakeLockPeriod } from "@/lib/stake-lock";
 import { useConnectModal } from "./WalletModal";
 import { Card, CardHeader, CardTitle, CardSubtitle } from "./ui/Card";
 import { Button } from "./ui/Button";
@@ -53,8 +57,12 @@ function OwnerOnlyOverlay({ message }: { message: string }) {
   );
 }
 
+/** finalizeEpoch scans MAX_SUPPLY; Sepolia block gas ~30M — use a safe ceiling if estimate fails. */
+const FINALIZE_EPOCH_GAS_FALLBACK = 12_000_000n;
+
 export function AdminPanel() {
   const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient();
   const { openConnectModal } = useConnectModal();
   const {
     isNftOwner,
@@ -107,6 +115,10 @@ export function AdminPanel() {
     query: { enabled: isNftOwner },
   });
 
+  const { stakeLockPeriod, epochMinInterval } = useVaultConfig();
+  const { qualifiedCount: qualifiedSharksNow, minted: mintedSharks } =
+    useQualifiedSharkCount(isVaultOwner);
+
   const { data: vaultData, refetch: refetchVault } = useReadContracts({
     contracts: [
       { address: VAULT_ADDRESS, abi: CryptoSharksStakingVaultAbi, functionName: "currentEpochId" },
@@ -118,7 +130,7 @@ export function AdminPanel() {
       },
       { address: VAULT_ADDRESS, abi: CryptoSharksStakingVaultAbi, functionName: "carryForwardUsdc" },
     ],
-    query: { enabled: isVaultOwner },
+    query: { enabled: isVaultOwner, refetchInterval: 12_000 },
   });
 
   const depositAmount = useMemo(() => parseUsdcInput(epochDeposit), [epochDeposit]);
@@ -139,10 +151,13 @@ export function AdminPanel() {
     query: { enabled: !!address && isVaultOwner },
   });
 
-  const currentEpochId = vaultData?.[0]?.result as bigint | undefined;
+  const nextEpochId = vaultData?.[0]?.result as bigint | undefined;
   const lastFinalizeTime = vaultData?.[1]?.result as bigint | undefined;
   const nextEligible = vaultData?.[2]?.result as bigint | undefined;
   const carryForward = vaultData?.[3]?.result as bigint | undefined;
+  const finalizedEpochCount = Number(nextEpochId ?? 0n);
+  const depositOnlyCarryForward =
+    (carryForward ?? 0n) > 0n && finalizedEpochCount === 0;
 
   const now = Math.floor(Date.now() / 1000);
   const canFinalize =
@@ -241,16 +256,34 @@ export function AdminPanel() {
   }, [isVaultOwner, depositAmount, writeContractAsync]);
 
   const onFinalize = useCallback(async () => {
-    if (!isVaultOwner) return;
+    if (!isVaultOwner || !address) return;
     setPendingAction("finalize");
+
+    let gas = FINALIZE_EPOCH_GAS_FALLBACK;
+    if (publicClient) {
+      try {
+        const estimated = await publicClient.estimateContractGas({
+          account: address,
+          address: VAULT_ADDRESS,
+          abi: CryptoSharksStakingVaultAbi,
+          functionName: "finalizeEpoch",
+          args: [depositAmount],
+        });
+        gas = estimated + estimated / 5n;
+      } catch {
+        // RPC may reject heavy estimate; fallback gas still works on most nodes
+      }
+    }
+
     const hash = await writeContractAsync({
       address: VAULT_ADDRESS,
       abi: CryptoSharksStakingVaultAbi,
       functionName: "finalizeEpoch",
       args: [depositAmount],
+      gas,
     });
     setTxHash(hash);
-  }, [isVaultOwner, depositAmount, writeContractAsync]);
+  }, [isVaultOwner, address, depositAmount, publicClient, writeContractAsync]);
 
   const onTransferNftOwnership = useCallback(async () => {
     if (!isNftOwner || !nftTransferTarget) return;
@@ -413,36 +446,57 @@ export function AdminPanel() {
                 Finalize epoch
               </CardTitle>
               <CardSubtitle>
-                Deposits USDC into the vault and snapshots qualified stakers. Requires
-                a 90-day gap since the last finalize (after the first epoch).
+                Deposits USDC and snapshots sharks that have completed the{" "}
+                {formatStakeLockPeriod(stakeLockPeriod)} stake lock. If zero sharks
+                qualify, USDC is carried forward and epoch count does not increase.
               </CardSubtitle>
             </div>
           </CardHeader>
 
+          {depositOnlyCarryForward && (
+            <div className="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100/90">
+              USDC was deposited but <strong>no sharks were qualified</strong> at snapshot,
+              so epoch count is still 0 and stakers cannot claim yet. Wait until sharks
+              finish the stake lock ({qualifiedSharksNow} of {mintedSharks} qualified now),
+              then finalize again.
+            </div>
+          )}
+
           <dl className="text-sm grid grid-cols-2 gap-3 mb-4 text-cyan-100/70">
             <div>
               <dt className="text-xs uppercase tracking-widest text-cyan-100/50">
-                Current epoch
+                Finalized epochs
               </dt>
               <dd className="font-display text-cyan-100 mt-0.5">
-                #{currentEpochId?.toString() ?? "—"}
+                {finalizedEpochCount === 0
+                  ? "None yet"
+                  : `${finalizedEpochCount} (claim epochs #0–#${finalizedEpochCount - 1})`}
               </dd>
             </div>
             <div>
               <dt className="text-xs uppercase tracking-widest text-cyan-100/50">
-                Carry forward
+                Qualified sharks now
+              </dt>
+              <dd className="font-display text-cyan-100 mt-0.5">
+                {qualifiedSharksNow}
+                {mintedSharks > 0 ? ` / ${mintedSharks} minted` : ""}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-widest text-cyan-100/50">
+                Carry forward pool
               </dt>
               <dd className="font-display text-cyan-100 mt-0.5">
                 ${formatUsdc(carryForward)} USDC
               </dd>
             </div>
-            <div className="col-span-2">
+            <div>
               <dt className="text-xs uppercase tracking-widest text-cyan-100/50">
-                Next eligible finalize
+                Next finalize
               </dt>
               <dd className="font-mono text-cyan-200 mt-0.5 text-xs">
                 {lastFinalizeTime === 0n || lastFinalizeTime === undefined
-                  ? "Now (first epoch)"
+                  ? "Now"
                   : canFinalize
                     ? "Now"
                     : nextEligible
