@@ -128,8 +128,8 @@ export function MintCard() {
             <div
               key={t.label}
               className={`rounded-xl p-3 text-center transition-all ${active
-                  ? "bg-cyan-400/10 ring-1 ring-cyan-400/50 shadow-glow"
-                  : "bg-navy-700/40 ring-1 ring-cyan-400/10"
+                ? "bg-cyan-400/10 ring-1 ring-cyan-400/50 shadow-glow"
+                : "bg-navy-700/40 ring-1 ring-cyan-400/10"
                 }`}
             >
               <div className="text-[10px] uppercase tracking-widest text-cyan-100/60">
@@ -220,16 +220,16 @@ export function MintCard() {
           <>
             <MintSteps />
             <Button
-            className="w-full"
-            size="lg"
-            onClick={onMint}
-            disabled={minting || mintConfirming || remaining === 0}
-          >
-            {(minting || mintConfirming) && <Loader2 className="h-4 w-4 animate-spin" />}
-            {mintConfirming
-              ? "Minting…"
-              : `Mint ${safeQty} Shark${safeQty > 1 ? "s" : ""}`}
-          </Button>
+              className="w-full"
+              size="lg"
+              onClick={onMint}
+              disabled={minting || mintConfirming || remaining === 0}
+            >
+              {(minting || mintConfirming) && <Loader2 className="h-4 w-4 animate-spin" />}
+              {mintConfirming
+                ? "Minting…"
+                : `Mint ${safeQty} Shark${safeQty > 1 ? "s" : ""}`}
+            </Button>
           </>
         )}
 
@@ -246,8 +246,8 @@ export function MintCard() {
 function MintSteps() {
   return (
     <ol className="mb-3 rounded-xl border border-cyan-400/15 bg-navy-800/50 px-4 py-3 text-sm text-cyan-100/80 space-y-1 list-decimal list-inside marker:text-cyan-400/70">
-      <li>Choose amount and click mint</li>
-      <li>Finalize USDC</li>
+      <li>Choose amount and approve USDC</li>
+      <li>Mint NFT</li>
     </ol>
   );
 }
