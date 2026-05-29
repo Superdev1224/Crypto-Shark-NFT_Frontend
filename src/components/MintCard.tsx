@@ -79,6 +79,7 @@ export function MintCard() {
 
   useEffect(() => {
     if (mintDone) {
+      setQuantity(1);
       refetchSupply();
       refetchPrice();
       refetchAllowance();
