@@ -11,6 +11,9 @@ import { CryptoSharksNFTAbi } from "@/lib/abis/CryptoSharksNFT";
 import { CryptoSharksStakingVaultAbi } from "@/lib/abis/CryptoSharksStakingVault";
 import { NFT_ADDRESS, VAULT_ADDRESS } from "@/lib/contracts";
 import { useClaimableEpochs } from "@/hooks/useClaimableEpochs";
+import { useVaultConfig } from "@/hooks/useVaultConfig";
+import { formatStakeLockPeriod } from "@/lib/stake-lock";
+import { claimWindowHint, OWNER_SETTLES_REWARD_PERIOD } from "@/lib/reward-period-copy";
 import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
 import { ClaimRewardsButton } from "./ClaimRewardsButton";
@@ -26,10 +29,13 @@ interface Props {
 
 export function OwnedTokenCard({ tokenId, nextEpochId, onChange }: Props) {
   const { address } = useAccount();
+  const { claimExpiryPeriod } = useVaultConfig();
+  const claimExpiryLabel = formatStakeLockPeriod(claimExpiryPeriod);
   const { claimable, totalClaimable, refetch: refetchRewards } = useClaimableEpochs(
     tokenId,
     nextEpochId,
-    address
+    address,
+    claimExpiryPeriod
   );
 
   const { data: isApprovedForAll, refetch: refetchApproval } = useReadContract({
@@ -112,8 +118,9 @@ export function OwnedTokenCard({ tokenId, nextEpochId, onChange }: Props) {
       )}
 
       <p className="text-xs text-cyan-100/60 leading-relaxed">
-        Stake to start the qualification clock. After the owner finalizes an epoch with
-        your shark qualified, you can claim USDC here or while still staked.
+        Stake to start the qualification clock. After the owner {OWNER_SETTLES_REWARD_PERIOD} with
+        your shark qualified, you can claim USDC here or while still staked.{" "}
+        {claimWindowHint(claimExpiryLabel)}
       </p>
 
       {!isApprovedForAll ? (

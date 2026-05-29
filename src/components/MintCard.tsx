@@ -127,11 +127,10 @@ export function MintCard() {
           return (
             <div
               key={t.label}
-              className={`rounded-xl p-3 text-center transition-all ${
-                active
+              className={`rounded-xl p-3 text-center transition-all ${active
                   ? "bg-cyan-400/10 ring-1 ring-cyan-400/50 shadow-glow"
                   : "bg-navy-700/40 ring-1 ring-cyan-400/10"
-              }`}
+                }`}
             >
               <div className="text-[10px] uppercase tracking-widest text-cyan-100/60">
                 {t.label}
@@ -205,17 +204,22 @@ export function MintCard() {
             Insufficient USDC balance
           </Button>
         ) : needsApprove ? (
-          <Button
-            className="w-full"
-            size="lg"
-            onClick={onApprove}
-            disabled={approving || approveConfirming}
-          >
-            {(approving || approveConfirming) && <Loader2 className="h-4 w-4 animate-spin" />}
-            {approveConfirming ? "Confirming approval…" : "Approve USDC"}
-          </Button>
+          <>
+            <MintSteps />
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={onApprove}
+              disabled={approving || approveConfirming}
+            >
+              {(approving || approveConfirming) && <Loader2 className="h-4 w-4 animate-spin" />}
+              {approveConfirming ? "Confirming approval…" : "Approve USDC"}
+            </Button>
+          </>
         ) : (
-          <Button
+          <>
+            <MintSteps />
+            <Button
             className="w-full"
             size="lg"
             onClick={onMint}
@@ -226,6 +230,7 @@ export function MintCard() {
               ? "Minting…"
               : `Mint ${safeQty} Shark${safeQty > 1 ? "s" : ""}`}
           </Button>
+          </>
         )}
 
         {mintDone && (
@@ -235,6 +240,15 @@ export function MintCard() {
         )}
       </div>
     </Card>
+  );
+}
+
+function MintSteps() {
+  return (
+    <ol className="mb-3 rounded-xl border border-cyan-400/15 bg-navy-800/50 px-4 py-3 text-sm text-cyan-100/80 space-y-1 list-decimal list-inside marker:text-cyan-400/70">
+      <li>Choose amount and click mint</li>
+      <li>Finalize USDC</li>
+    </ol>
   );
 }
 

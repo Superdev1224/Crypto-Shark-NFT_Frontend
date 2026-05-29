@@ -9,6 +9,7 @@ import { Stat } from "./ui/Stat";
 import { OwnedTokenCard } from "./OwnedTokenCard";
 import { StakedTokenCard } from "./StakedTokenCard";
 import { Anchor, Lock, Sparkles, Wallet } from "lucide-react";
+import { claimRewardPeriodRange } from "@/lib/reward-period-copy";
 import { useConnectModal } from "./WalletModal";
 import { Button } from "./ui/Button";
 
@@ -129,13 +130,13 @@ export function StakeDashboard() {
           hint="In the staking vault"
         />
         <Stat
-          label="Finalized Epochs"
+          label="Rewards Distributed"
           icon={<Sparkles className="h-4 w-4" />}
           value={finalizedEpochs}
           hint={
             finalizedEpochs === 0
-              ? "Owner must finalize with qualified sharks"
-              : `Claim rewards for epochs #0–#${finalizedEpochs - 1}`
+              ? "Owner must settle with qualified sharks"
+              : claimRewardPeriodRange(finalizedEpochs)
           }
         />
       </div>

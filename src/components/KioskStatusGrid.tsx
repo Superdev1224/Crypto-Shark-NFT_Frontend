@@ -65,7 +65,7 @@ export function KioskStatusGrid() {
           hint={`${data.totals.degraded} degraded · ${data.totals.offline} offline`}
         />
         <Stat
-          label="Projected Epoch Pool"
+          label="Projected Distribution Pool"
           icon={<Radio className="h-4 w-4" />}
           value={`$${data.projectedEpochPoolUsd.toLocaleString()}`}
           hint="15% of 90-day net (estimate)"

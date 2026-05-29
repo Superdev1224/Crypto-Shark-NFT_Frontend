@@ -32,11 +32,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "Crypto Sharks — Web3 × IRL Yield",
   description:
-    "1,000 utility NFTs anchored to real-world operating revenue. Stake your shark for 90 days and receive a pro-rata USDC share of every epoch.",
+    "1,000 utility NFTs anchored to real-world operating revenue. Stake your shark for 90 days and receive a pro-rata USDC share of every distribution cycle.",
   openGraph: {
     title: "Crypto Sharks — Web3 × IRL Yield",
     description:
-      "1,000 utility NFTs anchored to real-world operating revenue. Stake your shark for 90 days and receive a pro-rata USDC share of every epoch.",
+      "1,000 utility NFTs anchored to real-world operating revenue. Stake your shark for 90 days and receive a pro-rata USDC share of every distribution cycle.",
     images: ["/og-image.png"],
   },
   icons: {

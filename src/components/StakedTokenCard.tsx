@@ -13,6 +13,11 @@ import { Button } from "./ui/Button";
 import { ClaimRewardsButton } from "./ClaimRewardsButton";
 import { CountdownTimer } from "./CountdownTimer";
 import { NftImage } from "./NftImage";
+import {
+  rewardPeriodCountLabel,
+  SETTLE_PERIOD_ACTION,
+  claimWindowHint,
+} from "@/lib/reward-period-copy";
 import { Loader2 } from "lucide-react";
 
 interface Props {
@@ -24,8 +29,9 @@ interface Props {
 
 export function StakedTokenCard({ tokenId, isStakedInVault, nextEpochId, onChange }: Props) {
   const { address } = useAccount();
-  const { stakeLockPeriod } = useVaultConfig();
+  const { stakeLockPeriod, claimExpiryPeriod } = useVaultConfig();
   const lockLabel = formatStakeLockPeriod(stakeLockPeriod);
+  const claimExpiryLabel = formatStakeLockPeriod(claimExpiryPeriod);
 
   const { data: isQualifiedOnChain, refetch: refetchQualified } = useReadContract({
     address: VAULT_ADDRESS,
@@ -44,7 +50,7 @@ export function StakedTokenCard({ tokenId, isStakedInVault, nextEpochId, onChang
   });
 
   const { claimable, totalClaimable, finalizedCount, refetch: refetchRewards } =
-    useClaimableEpochs(tokenId, nextEpochId, address);
+    useClaimableEpochs(tokenId, nextEpochId, address, claimExpiryPeriod);
 
   const qualifyUnix =
     secondsUntilQualified !== undefined
@@ -107,8 +113,8 @@ export function StakedTokenCard({ tokenId, isStakedInVault, nextEpochId, onChang
 
       {finalizedCount === 0 && isQualified && (
         <p className="text-xs text-amber-200/80 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
-          You are qualified, but no epoch has been finalized yet. The owner must run{" "}
-          <strong>Finalize epoch</strong> with at least one qualified shark staked.
+          You are qualified, but no reward period has been settled yet. The owner must run{" "}
+          <strong>{SETTLE_PERIOD_ACTION}</strong> with at least one qualified shark staked.
         </p>
       )}
 
@@ -121,7 +127,8 @@ export function StakedTokenCard({ tokenId, isStakedInVault, nextEpochId, onChang
             ${formatUsdc(totalClaimable)}
           </div>
           <p className="text-xs text-cyan-100/50 mt-2">
-            {claimable.length} epoch{claimable.length > 1 ? "s" : ""} ready to claim
+            {claimable.length} {rewardPeriodCountLabel(claimable.length)} ready to claim ·{" "}
+            {claimWindowHint(claimExpiryLabel)}
           </p>
         </div>
       )}

@@ -96,7 +96,7 @@ export default function HomePage() {
             <CardTitle>2 · Stake 90 Days</CardTitle>
             <CardSubtitle>
               Lock your NFT in the vault. Once it crosses the 90-day threshold,
-              it's flagged Qualified at the next epoch snapshot.
+              it's flagged Qualified at the next reward period snapshot.
             </CardSubtitle>
           </Card>
           <Card>

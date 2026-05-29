@@ -18,12 +18,20 @@ export function useVaultConfig() {
     functionName: "EPOCH_MIN_INTERVAL",
   });
 
+  const { data: claimExpiryPeriod, refetch: refetchExpiry } = useReadContract({
+    address: VAULT_ADDRESS,
+    abi: CryptoSharksStakingVaultAbi,
+    functionName: "CLAIM_EXPIRY_PERIOD",
+  });
+
   return {
     stakeLockPeriod: stakeLockPeriod as bigint | undefined,
     epochMinInterval: epochMinInterval as bigint | undefined,
+    claimExpiryPeriod: claimExpiryPeriod as bigint | undefined,
     refetch: () => {
       refetchLock();
       refetchInterval();
+      refetchExpiry();
     },
   };
 }

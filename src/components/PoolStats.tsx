@@ -54,13 +54,13 @@ export function PoolStats() {
         hint="ERC-721A minted so far"
       />
       <Stat
-        label="Epochs Finalized"
+        label="Total Rewards Distributed"
         icon={<Users className="h-4 w-4" />}
         value={currentEpochId !== undefined ? currentEpochId.toString() : "—"}
         hint={carryForward !== undefined ? `Carry-forward: $${formatUsdc(carryForward)}` : ""}
       />
       <Stat
-        label="Next Epoch Window"
+        label="Next Reward Distribution"
         icon={<Calendar className="h-4 w-4" />}
         value={
           nextEpochUnix === 0 ? (
@@ -69,7 +69,7 @@ export function PoolStats() {
             <CountdownTimer targetUnix={nextEpochUnix} compact />
           )
         }
-        hint="Min. 90 days between epochs"
+        hint="Min. 90 days between Distributions"
       />
     </div>
   );

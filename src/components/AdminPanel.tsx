@@ -13,21 +13,32 @@ import { isAddress, zeroAddress, type Address } from "viem";
 import { CryptoSharksNFTAbi } from "@/lib/abis/CryptoSharksNFT";
 import { CryptoSharksStakingVaultAbi } from "@/lib/abis/CryptoSharksStakingVault";
 import { erc20Abi } from "@/lib/abis/erc20";
-import { NFT_ADDRESS, USDC_ADDRESS, VAULT_ADDRESS } from "@/lib/contracts";
+import { NFT_ADDRESS, USDC_ADDRESS, VAULT_ADDRESS, MAX_SUPPLY } from "@/lib/contracts";
 import { formatUsdc, parseUsdcInput, shortAddress } from "@/lib/format";
+import {
+  NEXT_SETTLEMENT_LABEL,
+  SETTLE_PERIOD_ACTION,
+  SETTLED_PERIODS_LABEL,
+  SETTLING_ACTION,
+  settledPeriodsStatLine,
+} from "@/lib/reward-period-copy";
 import { useIsContractOwner } from "@/hooks/useIsContractOwner";
+import { useExpiredUnclaimedRewards } from "@/hooks/useExpiredUnclaimedRewards";
 import { useQualifiedSharkCount } from "@/hooks/useQualifiedSharkCount";
+import { useSharkSupplyStats } from "@/hooks/useSharkSupplyStats";
 import { useVaultConfig } from "@/hooks/useVaultConfig";
 import { formatStakeLockPeriod } from "@/lib/stake-lock";
 import { useConnectModal } from "./WalletModal";
 import { Card, CardHeader, CardTitle, CardSubtitle } from "./ui/Card";
 import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
+import { Stat } from "./ui/Stat";
 import { ConnectWalletButton } from "./ConnectWalletButton";
 import { buildMetadataApiBaseURI } from "@/lib/nft-metadata";
 import { cn } from "@/lib/utils";
 import {
   Loader2,
+  Anchor,
   Lock,
   Shield,
   Wallet,
@@ -40,6 +51,7 @@ type PendingAction =
   | "withdraw"
   | "approve"
   | "finalize"
+  | "reclaim"
   | "setBaseURI"
   | "lockBaseURI"
   | "transferNftOwner"
@@ -75,6 +87,8 @@ export function AdminPanel() {
   } = useIsContractOwner();
 
   const [epochDeposit, setEpochDeposit] = useState("1000");
+  const [reclaimEpochId, setReclaimEpochId] = useState("0");
+  const [reclaimTokenId, setReclaimTokenId] = useState("1");
   const [baseUriInput, setBaseUriInput] = useState("");
   const [nftNewOwner, setNftNewOwner] = useState("");
   const [vaultNewOwner, setVaultNewOwner] = useState("");
@@ -115,9 +129,17 @@ export function AdminPanel() {
     query: { enabled: isNftOwner },
   });
 
-  const { stakeLockPeriod, epochMinInterval } = useVaultConfig();
+  const { stakeLockPeriod, epochMinInterval, claimExpiryPeriod } = useVaultConfig();
   const { qualifiedCount: qualifiedSharksNow, minted: mintedSharks } =
     useQualifiedSharkCount(isVaultOwner);
+  const {
+    minted: supplyMinted,
+    staked: stakedSharks,
+    unstaked: unstakedSharks,
+    isLoadingSupply,
+    isLoadingStakeSplit,
+    refetch: refetchSupplyStats,
+  } = useSharkSupplyStats(isAnyOwner);
 
   const { data: vaultData, refetch: refetchVault } = useReadContracts({
     contracts: [
@@ -156,6 +178,14 @@ export function AdminPanel() {
   const nextEligible = vaultData?.[2]?.result as bigint | undefined;
   const carryForward = vaultData?.[3]?.result as bigint | undefined;
   const finalizedEpochCount = Number(nextEpochId ?? 0n);
+
+  const {
+    expiredUnclaimed,
+    totalExpiredUnclaimed,
+    isLoading: expiredLoading,
+    refetch: refetchExpired,
+  } = useExpiredUnclaimedRewards(isVaultOwner, nextEpochId, claimExpiryPeriod);
+
   const depositOnlyCarryForward =
     (carryForward ?? 0n) > 0n && finalizedEpochCount === 0;
 
@@ -197,6 +227,8 @@ export function AdminPanel() {
     refetchAllowance();
     refetchOwners();
     refetchTokenUri();
+    refetchSupplyStats();
+    refetchExpired();
     setPendingAction(null);
     setTxHash(undefined);
   }, [
@@ -207,6 +239,8 @@ export function AdminPanel() {
     refetchAllowance,
     refetchOwners,
     refetchTokenUri,
+    refetchSupplyStats,
+    refetchExpired,
   ]);
 
   const onSetBaseURI = useCallback(async () => {
@@ -284,6 +318,37 @@ export function AdminPanel() {
     });
     setTxHash(hash);
   }, [isVaultOwner, address, depositAmount, publicClient, writeContractAsync]);
+
+  const reclaimEpoch = useMemo(() => {
+    const parsed = reclaimEpochId.trim();
+    if (!/^\d+$/.test(parsed)) return null;
+    return BigInt(parsed);
+  }, [reclaimEpochId]);
+
+  const reclaimToken = useMemo(() => {
+    const parsed = reclaimTokenId.trim();
+    if (!/^\d+$/.test(parsed)) return null;
+    const id = BigInt(parsed);
+    if (id < 1n || id > BigInt(MAX_SUPPLY)) return null;
+    return id;
+  }, [reclaimTokenId]);
+
+  const onReclaimExpired = useCallback(async () => {
+    if (!isVaultOwner || reclaimEpoch === null || reclaimToken === null) return;
+    setPendingAction("reclaim");
+    const hash = await writeContractAsync({
+      address: VAULT_ADDRESS,
+      abi: CryptoSharksStakingVaultAbi,
+      functionName: "reclaimExpiredReward",
+      args: [reclaimEpoch, reclaimToken],
+    });
+    setTxHash(hash);
+  }, [isVaultOwner, reclaimEpoch, reclaimToken, writeContractAsync]);
+
+  const onSelectExpiredReward = useCallback((epochId: bigint, tokenId: bigint) => {
+    setReclaimEpochId(epochId.toString());
+    setReclaimTokenId(tokenId.toString());
+  }, []);
 
   const onTransferNftOwnership = useCallback(async () => {
     if (!isNftOwner || !nftTransferTarget) return;
@@ -394,6 +459,27 @@ export function AdminPanel() {
         <ConnectWalletButton />
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Stat
+          label="Total Minted"
+          icon={<Anchor className="h-4 w-4" />}
+          value={isLoadingSupply ? "…" : supplyMinted}
+          hint={`${supplyMinted.toLocaleString()} / ${MAX_SUPPLY.toLocaleString()} supply`}
+        />
+        <Stat
+          label="Staked NFTs"
+          icon={<Lock className="h-4 w-4" />}
+          value={isLoadingStakeSplit ? "…" : stakedSharks}
+          hint="Locked in the staking vault"
+        />
+        <Stat
+          label="Unstaked NFTs"
+          icon={<Wallet className="h-4 w-4" />}
+          value={isLoadingStakeSplit ? "…" : unstakedSharks}
+          hint="Held in wallets outside the vault"
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="relative overflow-hidden">
           {!isNftOwner && (
@@ -405,10 +491,10 @@ export function AdminPanel() {
                 <Wallet className="h-5 w-5 text-cyan-300" />
                 Withdraw mint USDC
               </CardTitle>
-              <CardSubtitle>
+              {/* <CardSubtitle>
                 Calls <code className="text-cyan-200">withdrawUSDC()</code> on the NFT
                 contract. Sends all USDC held by the NFT contract to the owner wallet.
-              </CardSubtitle>
+              </CardSubtitle> */}
             </div>
           </CardHeader>
           <div className="rounded-xl bg-navy-800/60 border border-cyan-400/10 p-4 mb-4">
@@ -437,40 +523,38 @@ export function AdminPanel() {
 
         <Card className="relative overflow-hidden">
           {!isVaultOwner && (
-            <OwnerOnlyOverlay message="Connect the vault contract owner wallet to finalize epochs." />
+            <OwnerOnlyOverlay message="Connect the vault contract owner wallet to settle reward periods." />
           )}
           <CardHeader>
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Coins className="h-5 w-5 text-cyan-300" />
-                Finalize epoch
+                {SETTLE_PERIOD_ACTION}
               </CardTitle>
-              <CardSubtitle>
+              {/* <CardSubtitle>
                 Deposits USDC and snapshots sharks that have completed the{" "}
                 {formatStakeLockPeriod(stakeLockPeriod)} stake lock. If zero sharks
-                qualify, USDC is carried forward and epoch count does not increase.
-              </CardSubtitle>
+                qualify, USDC is carried forward and the settled period count does not increase.
+              </CardSubtitle> */}
             </div>
           </CardHeader>
 
           {depositOnlyCarryForward && (
             <div className="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100/90">
               USDC was deposited but <strong>no sharks were qualified</strong> at snapshot,
-              so epoch count is still 0 and stakers cannot claim yet. Wait until sharks
+              so the settled period count is still 0 and stakers cannot claim yet. Wait until sharks
               finish the stake lock ({qualifiedSharksNow} of {mintedSharks} qualified now),
-              then finalize again.
+              then settle again.
             </div>
           )}
 
           <dl className="text-sm grid grid-cols-2 gap-3 mb-4 text-cyan-100/70">
             <div>
               <dt className="text-xs uppercase tracking-widest text-cyan-100/50">
-                Finalized epochs
+                {SETTLED_PERIODS_LABEL}
               </dt>
               <dd className="font-display text-cyan-100 mt-0.5">
-                {finalizedEpochCount === 0
-                  ? "None yet"
-                  : `${finalizedEpochCount} (claim epochs #0–#${finalizedEpochCount - 1})`}
+                {settledPeriodsStatLine(finalizedEpochCount)}
               </dd>
             </div>
             <div>
@@ -492,7 +576,7 @@ export function AdminPanel() {
             </div>
             <div>
               <dt className="text-xs uppercase tracking-widest text-cyan-100/50">
-                Next finalize
+                {NEXT_SETTLEMENT_LABEL}
               </dt>
               <dd className="font-mono text-cyan-200 mt-0.5 text-xs">
                 {lastFinalizeTime === 0n || lastFinalizeTime === undefined
@@ -520,7 +604,7 @@ export function AdminPanel() {
           />
           <p className="text-xs text-cyan-100/50 mb-4">
             Your wallet: ${formatUsdc(ownerUsdcBalance as bigint | undefined)} USDC
-            {needsApprove && depositAmount > 0n ? " · approval required before finalize" : ""}
+            {needsApprove && depositAmount > 0n ? " · approval required before settlement" : ""}
           </p>
 
           <div className="flex flex-col gap-2">
@@ -543,7 +627,115 @@ export function AdminPanel() {
               {pendingAction === "finalize" && busy && (
                 <Loader2 className="h-4 w-4 animate-spin" />
               )}
-              {pendingAction === "finalize" && confirming ? "Finalizing…" : "Finalize epoch"}
+              {pendingAction === "finalize" && confirming ? SETTLING_ACTION : SETTLE_PERIOD_ACTION}
+            </Button>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-cyan-400/10">
+            <h3 className="text-sm font-medium text-cyan-100 mb-1">Reclaim expired rewards</h3>
+            <p className="text-xs text-cyan-100/50 mb-4 leading-relaxed">
+              If a qualified shark does not claim within{" "}
+              {formatStakeLockPeriod(claimExpiryPeriod)} of settlement, recover its USDC share to
+              the vault owner wallet.
+            </p>
+
+            <div className="rounded-xl bg-navy-800/60 border border-cyan-400/10 p-4 mb-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="text-xs uppercase tracking-widest text-cyan-100/50">
+                  Expired & unclaimed
+                </span>
+                {expiredLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+                ) : (
+                  <span className="text-xs text-cyan-100/60">
+                    {expiredUnclaimed.length} slot{expiredUnclaimed.length === 1 ? "" : "s"} · $
+                    {formatUsdc(totalExpiredUnclaimed)} USDC
+                  </span>
+                )}
+              </div>
+
+              {expiredLoading ? (
+                <p className="text-xs text-cyan-100/50">Scanning settled periods…</p>
+              ) : expiredUnclaimed.length === 0 ? (
+                <p className="text-xs text-cyan-100/50">
+                  No expired unclaimed rewards found across {finalizedEpochCount} settled period
+                  {finalizedEpochCount === 1 ? "" : "s"}.
+                </p>
+              ) : (
+                <ul className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                  {expiredUnclaimed.map(({ epochId, tokenId, amount, expiredAt }) => (
+                    <li key={`${epochId}-${tokenId}`}>
+                      <button
+                        type="button"
+                        onClick={() => onSelectExpiredReward(epochId, tokenId)}
+                        disabled={!isVaultOwner}
+                        className={cn(
+                          "w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition",
+                          "hover:bg-cyan-400/10 disabled:opacity-50 disabled:pointer-events-none",
+                          reclaimEpoch === epochId && reclaimToken === tokenId
+                            ? "bg-cyan-400/15 ring-1 ring-cyan-400/30"
+                            : "bg-navy-900/40"
+                        )}
+                      >
+                        <span className="text-cyan-100 min-w-0">
+                          <span className="block">
+                            Shark #{tokenId.toString()}
+                            <span className="text-cyan-100/50 mx-1.5">·</span>
+                            Period #{epochId.toString()}
+                          </span>
+                          <span className="block text-[10px] text-cyan-100/45 mt-0.5">
+                            Expired {new Date(expiredAt * 1000).toLocaleDateString()}
+                          </span>
+                        </span>
+                        <span className="shrink-0 font-mono text-cyan-200">
+                          ${formatUsdc(amount)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="block text-xs text-cyan-100/60 mb-1">Reward period #</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={reclaimEpochId}
+                  onChange={(e) => setReclaimEpochId(e.target.value)}
+                  disabled={!isVaultOwner}
+                  className="w-full h-10 px-3 bg-navy-700/60 border border-cyan-400/20 rounded-lg text-cyan-100 outline-none focus:ring-2 focus:ring-cyan-400/40 disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-cyan-100/60 mb-1">Shark token ID</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_SUPPLY}
+                  step={1}
+                  value={reclaimTokenId}
+                  onChange={(e) => setReclaimTokenId(e.target.value)}
+                  disabled={!isVaultOwner}
+                  className="w-full h-10 px-3 bg-navy-700/60 border border-cyan-400/20 rounded-lg text-cyan-100 outline-none focus:ring-2 focus:ring-cyan-400/40 disabled:opacity-50"
+                />
+              </div>
+            </div> */}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={onReclaimExpired}
+              disabled={!isVaultOwner || busy || reclaimEpoch === null || reclaimToken === null}
+            >
+              {pendingAction === "reclaim" && busy && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              {pendingAction === "reclaim" && confirming
+                ? "Reclaiming…"
+                : "Reclaim expired reward"}
             </Button>
           </div>
         </Card>
@@ -566,11 +758,11 @@ export function AdminPanel() {
               <code className="text-cyan-200">{"{baseURI}{tokenId}"}</code>.
             </CardSubtitle>
           </div>
-          {baseUriLocked ? (
+          {/* {baseUriLocked ? (
             <Badge tone="amber">Base URI locked</Badge>
           ) : (
             <Badge tone="teal">Base URI editable</Badge>
-          )}
+          )} */}
         </CardHeader>
 
         <div className="rounded-xl bg-navy-800/60 border border-cyan-400/10 p-4 mb-4 space-y-2 text-sm">
@@ -640,8 +832,7 @@ export function AdminPanel() {
                 Transfer NFT ownership
               </CardTitle>
               <CardSubtitle>
-                Calls <code className="text-cyan-200">transferOwnership</code> on the NFT
-                contract. Current owner:{" "}
+                Current owner:{" "}
                 <span className="font-mono text-cyan-200">{shortAddress(nftOwner)}</span>
               </CardSubtitle>
             </div>
@@ -690,8 +881,7 @@ export function AdminPanel() {
                 Transfer vault ownership
               </CardTitle>
               <CardSubtitle>
-                Calls <code className="text-cyan-200">transferOwnership</code> on the staking
-                vault. Current owner:{" "}
+                Current owner:{" "}
                 <span className="font-mono text-cyan-200">{shortAddress(vaultOwner)}</span>
               </CardSubtitle>
             </div>

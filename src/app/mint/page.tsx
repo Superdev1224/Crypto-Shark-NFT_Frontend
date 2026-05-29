@@ -16,7 +16,7 @@ export default function MintPage() {
         </h1>
         <p className="text-cyan-100/60 max-w-2xl mx-auto">
           1,000 utility NFTs in four tiers. Pay in USDC. Once minted, stake your
-          shark for 90 days to unlock pro-rata epoch rewards.
+          shark for 90 days to unlock pro-rata distribution cycle rewards.
         </p>
       </div>
 

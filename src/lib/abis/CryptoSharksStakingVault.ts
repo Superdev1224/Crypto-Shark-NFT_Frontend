@@ -27,6 +27,16 @@ export const CryptoSharksStakingVaultAbi = [
   },
   {
     "inputs": [],
+    "name": "ClaimExpired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ClaimNotExpired",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "EpochAlreadyFinalized",
     "type": "error"
   },
@@ -235,6 +245,37 @@ export const CryptoSharksStakingVaultAbi = [
     "inputs": [
       {
         "indexed": true,
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "RewardReclaimed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
         "internalType": "address",
         "name": "staker",
         "type": "address"
@@ -273,6 +314,19 @@ export const CryptoSharksStakingVaultAbi = [
     ],
     "name": "Unstaked",
     "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "CLAIM_EXPIRY_PERIOD",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [],
@@ -342,6 +396,25 @@ export const CryptoSharksStakingVaultAbi = [
     "name": "claim",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      }
+    ],
+    "name": "claimDeadline",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -614,6 +687,24 @@ export const CryptoSharksStakingVaultAbi = [
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "epochId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      }
+    ],
+    "name": "reclaimExpiredReward",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
